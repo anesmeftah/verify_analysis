@@ -70,7 +70,10 @@ def parser(file_path: str) -> Dict[int, TestResult]:
             if result_match:
                 current_test.end_idx = f.tell()
                 current_test = TestResult(file_path=file_path)
-                
+
+    for test_id in list(tests):
+        tests[test_id] = get_test_summary(tests, test_id)
+
     return tests
 
 
@@ -114,13 +117,20 @@ def get_test_summary(tests_dict: Dict[int, TestResult], test_id: int) -> TestRes
     if violation_matches:
         test.violations = int(violation_matches[-1])
         
-    status_match = re.search(r"verified_status\s+(\S+)", text)
+    status_match = re.findall(r"verified_status\s+(\S+)", text)
     if status_match:
-        test.verified_status = status_match.group(1).strip()
+        test.verified_status = status_match[-1].strip()
         
     success_match = re.search(r"verified_success\s+(\S+)", text)
     if success_match:
         test.verified_success = success_match.group(1).strip().lower() == "true"
+        
+    final_result_match = re.search(r"Result:\s*(\S+)", text)
+    if final_result_match:
+        status = final_result_match.group(1).strip()
+        test.verified_status = status
+        if status.lower() not in ['unknown', 'timeout']:
+            test.verified_success = True
         
     attack_match = re.search(r"Attack finished in\s+([\d.]+)\s+seconds", text)
     if attack_match:
@@ -129,6 +139,10 @@ def get_test_summary(tests_dict: Dict[int, TestResult], test_id: int) -> TestRes
     total_time_match = re.search(r"Result:\s*\S+\s+in\s+([\d.]+)\s+seconds", text)
     if total_time_match:
         test.total_time = float(total_time_match.group(1))
+    else:
+        time_match = re.search(r"Time:\s*([\d.]+)", text)
+        if time_match:
+            test.total_time = float(time_match.group(1))
 
     # Détermination du type de test
     test.test_type = check_type(text, test.violations)
